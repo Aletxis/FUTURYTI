@@ -43,10 +43,9 @@ try:
         unsafe_allow_html=True
     )
 
-    # --- MANEJO DE HOJAS (SOLUCIÓN ERROR 2009) ---
+    # --- MANEJO DE HOJAS ---
     xls = pd.ExcelFile(export_url)
     hojas_reales = xls.sheet_names
-    # Convertimos nombres de hojas a minúsculas para el menú
     hojas_display = [str(h).lower() for h in hojas_reales]
     mapa_hojas = dict(zip(hojas_display, hojas_reales))
 
@@ -59,7 +58,7 @@ try:
     df.columns = [str(c).strip() for c in df.columns]
     col_vendedor = df.columns[0]
 
-    # --- 2. LIMPIEZA DE DATOS (ESPACIOS E INCONSISTENCIAS) ---
+    # --- 2. LIMPIEZA DE DATOS ---
     df[col_vendedor] = df[col_vendedor].astype(str).str.strip().str.upper()
 
     vendedores_permitidos = [
@@ -71,7 +70,6 @@ try:
         "WILLIAM BRITO", "WILLIAN MOLINA","RAMOS AYORA GLENDA"
     ]
 
-    # --- 3. GENERAR LISTA PARA SELECTBOX ---
     vendedores_existentes = df[col_vendedor].unique()
     vendedores_db = sorted([v for v in vendedores_existentes if v in vendedores_permitidos])
     
@@ -122,11 +120,17 @@ try:
         datos_v = datos_v.iloc[:, :2] 
         datos_v.columns = ['Fecha', 'Venta']
         
-        # FORMATEAR FECHAS A MINÚSCULAS
-        datos_v['Fecha'] = datos_v['Fecha'].astype(str).str.lower()
+        # --- CORRECCIÓN DE FECHAS (SIN HORA Y FORMATO DÍA-MES-AÑO) ---
+        # 1. Convertimos a formato fecha real para ordenar correctamente
+        datos_v['Fecha_DT'] = pd.to_datetime(datos_v['Fecha'], errors='coerce')
+        
+        # 2. Creamos la columna visual limpia (DD-MM-YYYY)
+        datos_v['Fecha_Limpia'] = datos_v['Fecha_DT'].dt.strftime('%d-%m-%Y')
         
         datos_v['Venta'] = pd.to_numeric(datos_v['Venta'], errors='coerce').fillna(0)
-        ventas_realizadas = datos_v[datos_v['Venta'] > 0].copy()
+        
+        # Filtramos solo ventas > 0 y ordenamos por la fecha real
+        ventas_realizadas = datos_v[datos_v['Venta'] > 0].copy().sort_values('Fecha_DT')
         
         total_dinero = ventas_realizadas['Venta'].sum()
         numero_ventas = len(ventas_realizadas)
@@ -144,10 +148,18 @@ try:
             </div>""", unsafe_allow_html=True)
 
         if not ventas_realizadas.empty:
-            fig_bar = px.bar(ventas_realizadas, x='Fecha', y='Venta', title="Rendimiento Diario", color_discrete_sequence=['#4CAF50'])
+            # Usamos la fecha limpia para el gráfico
+            fig_bar = px.bar(ventas_realizadas, x='Fecha_Limpia', y='Venta', 
+                             title="Rendimiento Diario", 
+                             labels={'Fecha_Limpia': 'Fecha', 'Venta': 'Monto ($)'},
+                             color_discrete_sequence=['#4CAF50'])
             st.plotly_chart(fig_bar, use_container_width=True)
+            
             st.markdown('<div class="detalle-titulo">📅 Detalle de Ventas Diarias</div>', unsafe_allow_html=True)
-            st.dataframe(ventas_realizadas, use_container_width=True, hide_index=True)
+            
+            # Mostramos la tabla solo con la fecha formateada y la venta
+            detalle_final = ventas_realizadas[['Fecha_Limpia', 'Venta']].rename(columns={'Fecha_Limpia': 'Fecha'})
+            st.dataframe(detalle_final, use_container_width=True, hide_index=True)
         else:
             st.info(f"No se encontraron ventas para {vendedor_sel} en este periodo.")
 
