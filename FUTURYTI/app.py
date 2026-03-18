@@ -18,20 +18,14 @@ st.markdown("""
     .total-general-amount { font-size: 45px; font-weight: bold; color: #4CAF50; }
     .detalle-titulo { color: #ffffff; font-size: 20px; font-weight: 600; margin-top: 20px; margin-bottom: 10px; }
     [data-testid="stSidebar"] { background-color: #1a1c24; }
-    
-    [data-testid="sidebar-collapsed-control"], [data-testid="stSidebarCollapseButton"] {
-        display: none !important;
-    }
-
+    [data-testid="sidebar-collapsed-control"], [data-testid="stSidebarCollapseButton"] { display: none !important; }
     header, footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
 URL_DRIVE = "https://docs.google.com/spreadsheets/d/18WS22r1Fml5a9qW3fJOj40d0h7aldJVj/edit?usp=sharing&ouid=109406393059970285073&rtpof=true&sd=true"
-
-# --- CONFIGURACIÓN DEL LOGO ---
-URL_LOGO_IMAGEN = "https://lh4.googleusercontent.com/proxy/SeW7l23MFgElfFnJzA8WsomRRdBeiXYsMuQMdiB6_m4J0N0j7RGAB09PNGAO-uUPhKMPITGfAgagRh76fzbODUl3jU3utoz20hT2W99Q7BODxV-g"  # CAMBIA ESTO POR EL LINK DE TU IMAGEN
-URL_SITIO_WEB = "https://tu-sitio-web.com"           # CAMBIA ESTO POR TU WEB
+URL_LOGO_IMAGEN = "https://lh4.googleusercontent.com/proxy/SeW7l23MFgElfFnJzA8WsomRRdBeiXYsMuQMdiB6_m4J0N0j7RGAB09PNGAO-uUPhKMPITGfAgagRh76fzbODUl3jU3utoz20hT2W99Q7BODxV-g" 
+URL_SITIO_WEB = "https://tu-sitio-web.com"
 
 @st.cache_data(ttl=3600)
 def cargar_datos(url, nombre_hoja):
@@ -43,44 +37,59 @@ try:
     file_id = URL_DRIVE.split('/')[-2]
     export_url = f'https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx'
 
-    # --- AQUÍ VA EL LOGO (PRIMER ELEMENTO DE LA SIDEBAR) ---
+    # --- SIDEBAR: LOGO ---
     st.sidebar.markdown(
-        f"""
-        <div style="text-align: center; padding-bottom: 20px;">
-            <a href="{URL_SITIO_WEB}" target="_blank">
-                <img src="{URL_LOGO_IMAGEN}" style="width: 85%; max-width: 250px;">
-            </a>
-        </div>
-        """,
+        f'<div style="text-align: center; padding-bottom: 20px;"><a href="{URL_SITIO_WEB}" target="_blank"><img src="{URL_LOGO_IMAGEN}" style="width: 85%; max-width: 250px;"></a></div>',
         unsafe_allow_html=True
     )
 
-    hojas = pd.ExcelFile(export_url).sheet_names
-    mes_sel = st.sidebar.selectbox("📅 Seleccionar Mes:", hojas)
+    # --- MANEJO DE HOJAS (SOLUCIÓN ERROR 2009) ---
+    xls = pd.ExcelFile(export_url)
+    hojas_reales = xls.sheet_names
+    # Convertimos nombres de hojas a minúsculas para el menú
+    hojas_display = [str(h).lower() for h in hojas_reales]
+    mapa_hojas = dict(zip(hojas_display, hojas_reales))
+
+    mes_sel_display = st.sidebar.selectbox("📅 Seleccionar Mes:", hojas_display)
+    mes_real = mapa_hojas[mes_sel_display]
     
-    df = cargar_datos(URL_DRIVE, mes_sel)
+    df = cargar_datos(URL_DRIVE, mes_real)
+
+    # --- 1. LIMPIEZA DE COLUMNAS ---
     df.columns = [str(c).strip() for c in df.columns]
     col_vendedor = df.columns[0]
+
+    # --- 2. LIMPIEZA DE DATOS (ESPACIOS E INCONSISTENCIAS) ---
+    df[col_vendedor] = df[col_vendedor].astype(str).str.strip().str.upper()
 
     vendedores_permitidos = [
         "ALEXANDRA REINO", "ANDREA MENDOZA", "CESAR VERA", "DIANA RIVERA", 
         "EDISON SACA", "FRANKLIN QUEZADA", "GLENDA RAMOS AYORA", "JENNIFER ATANCURI", 
         "JORGE GARCIA", "LAURA MORAN", "MANCHENO KARLA", "MARIA JOSE PEÑAFIEL", 
         "MELANY GUZHÑAY", "NANCY JARAMA", "PRISCILA RAMOS", "SILVIA YUNGA", 
-        "STALIN ROJAS", "SUSANA PACURUCO", "VERONICA MALO", "WILLIAM BRITO", "WILLIAN MOLINA"
+        "STALIN ROJAS", "SUSANA PACURUCO", "SUSANA PACURUCU", "VERONICA MALO", 
+        "WILLIAM BRITO", "WILLIAN MOLINA","RAMOS AYORA GLENDA"
     ]
 
-    vendedores_db = sorted([v for v in df[col_vendedor].unique() if str(v).strip().upper() in vendedores_permitidos])
+    # --- 3. GENERAR LISTA PARA SELECTBOX ---
+    vendedores_existentes = df[col_vendedor].unique()
+    vendedores_db = sorted([v for v in vendedores_existentes if v in vendedores_permitidos])
     
     st.sidebar.markdown("---")
     ver_todo = st.sidebar.button("📊 Ver Resumen General")
-    vendedor_sel = st.sidebar.selectbox("👤 Seleccionar Vendedor:", vendedores_db)
+    
+    if not vendedores_db:
+        st.sidebar.warning("⚠️ No se encontraron vendedores válidos.")
+        vendedor_sel = None
+    else:
+        vendedor_sel = st.sidebar.selectbox("👤 Seleccionar Vendedor:", vendedores_db)
 
     # --- LÓGICA DE VISUALIZACIÓN ---
     if ver_todo:
         st.markdown('<div class="asesor-header">📊 Resumen General de Ventas</div>', unsafe_allow_html=True)
         col_total_name = [c for c in df.columns if 'TOTAL' in c.upper()][0]
-        resumen = df[df[col_vendedor].str.upper().isin(vendedores_permitidos)][[col_vendedor, col_total_name]]
+        
+        resumen = df[df[col_vendedor].isin(vendedores_permitidos)][[col_vendedor, col_total_name]]
         resumen.columns = ['Vendedor', 'Monto Total']
         resumen = resumen[resumen['Monto Total'] > 0].sort_values(by='Monto Total', ascending=False)
         total_general_mes = resumen['Monto Total'].sum()
@@ -97,19 +106,28 @@ try:
             <div class="card-general">
                 <div class="total-label" style="color: #bbb;">Venta Total Consolidada del Mes</div>
                 <div class="total-general-amount">${total_general_mes:,.2f}</div>
-                <div style="font-size: 14px; color: #888; margin-top: 10px;">Basado en la hoja: {mes_sel}</div>
-            </div>
-        """, unsafe_allow_html=True)
-    else:
+                <div style="font-size: 14px; color: #888; margin-top: 10px;">Hoja: {mes_sel_display}</div>
+            </div>""", unsafe_allow_html=True)
+
+    elif vendedor_sel:
         st.markdown(f'<div class="asesor-header">👤 Asesor: {vendedor_sel}</div>', unsafe_allow_html=True)
-        columnas_fecha = [c for c in df.columns if any(m in str(c).lower() for m in ['-','/']) or any(m in str(c).lower() for m in ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'])]
+        
+        columnas_fecha = [c for c in df.columns if any(m in str(c).lower() for m in ['-','/']) or 
+                         any(m in str(c).lower() for m in ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'])]
         columnas_fecha = [c for c in columnas_fecha if c != col_vendedor]
+        
         datos_fila = df[df[col_vendedor] == vendedor_sel][columnas_fecha]
+        
         datos_v = datos_fila.T.reset_index()
         datos_v = datos_v.iloc[:, :2] 
         datos_v.columns = ['Fecha', 'Venta']
+        
+        # FORMATEAR FECHAS A MINÚSCULAS
+        datos_v['Fecha'] = datos_v['Fecha'].astype(str).str.lower()
+        
         datos_v['Venta'] = pd.to_numeric(datos_v['Venta'], errors='coerce').fillna(0)
         ventas_realizadas = datos_v[datos_v['Venta'] > 0].copy()
+        
         total_dinero = ventas_realizadas['Venta'].sum()
         numero_ventas = len(ventas_realizadas)
 
@@ -123,20 +141,15 @@ try:
                     <div class="total-label">Cantidad de Ventas</div>
                     <div class="total-amount">{numero_ventas}</div>
                 </div>
-            </div>
-        """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
 
         if not ventas_realizadas.empty:
-            ventas_realizadas['Fecha'] = pd.to_datetime(ventas_realizadas['Fecha'], errors='coerce')
-            ventas_realizadas = ventas_realizadas.sort_values('Fecha')
             fig_bar = px.bar(ventas_realizadas, x='Fecha', y='Venta', title="Rendimiento Diario", color_discrete_sequence=['#4CAF50'])
             st.plotly_chart(fig_bar, use_container_width=True)
             st.markdown('<div class="detalle-titulo">📅 Detalle de Ventas Diarias</div>', unsafe_allow_html=True)
-            tabla_display = ventas_realizadas.copy()
-            tabla_display['Fecha'] = tabla_display['Fecha'].dt.strftime('%d/%m/%Y')
-            st.dataframe(tabla_display, use_container_width=True, hide_index=True)
+            st.dataframe(ventas_realizadas, use_container_width=True, hide_index=True)
         else:
-            st.info("No se encontraron ventas registradas para este asesor en este periodo.")
+            st.info(f"No se encontraron ventas para {vendedor_sel} en este periodo.")
 
 except Exception as e:
     st.error(f"Se detectó un problema: {e}")
