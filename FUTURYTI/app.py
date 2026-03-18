@@ -5,9 +5,15 @@ import plotly.express as px
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Inmovision - Dashboard Corporativo", layout="wide")
 
-# 2. CSS PARA DISEÑO UNIFICADO (Manteniendo las tarjetas blancas con borde de color)
+# 2. CSS PARA DISEÑO UNIFICADO
 st.markdown("""
     <style>
+    /* BLOQUE PARA OCULTAR LA FLECHA DEL SIDEBAR */
+    [data-testid="bundle-lib-sidebar-close-icon"], 
+    [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+    }
+    
     .stApp { background-color: #0e1117 !important; }
     .asesor-header { color: #ffffff; font-size: 26px; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }
     .card-container { display: flex; gap: 15px; margin-bottom: 25px; margin-top: 10px; }
@@ -23,6 +29,7 @@ st.markdown("""
 # 3. CONFIGURACIÓN DE RECURSOS
 URL_VENTAS = "https://docs.google.com/spreadsheets/d/18WS22r1Fml5a9qW3fJOj40d0h7aldJVj/edit?usp=sharing"
 URL_INSTALACIONES = "https://docs.google.com/spreadsheets/d/1QqH8lGktix5YLV7seIL9cXUxWCaANauM/edit?usp=sharing"
+URL_GESTION = "https://docs.google.com/spreadsheets/d/1z_Y-dSghRs0nuFwOm6Eh_ZTPE-RKRVcj/edit?usp=sharing"
 URL_LOGO = "https://lh4.googleusercontent.com/proxy/SeW7l23MFgElfFnJzA8WsomRRdBeiXYsMuQMdiB6_m4J0N0j7RGAB09PNGAO-uUPhKMPITGfAgagRh76fzbODUl3jU3utoz20hT2W99Q7BODxV-g" 
 
 VENDEDORES_PERMITIDOS = [
@@ -47,7 +54,8 @@ def cargar_datos(url, nombre_hoja):
 # --- SIDEBAR ---
 st.sidebar.markdown(f'<img src="{URL_LOGO}" class="logo-sidebar">', unsafe_allow_html=True)
 st.sidebar.title("Menú Principal")
-seccion = st.sidebar.radio("Seleccione un Módulo:", ["📊 Control de Ventas", "🛠️ Reporte de Instalaciones"])
+seccion = st.sidebar.radio("Seleccione un Módulo:", 
+                           ["📊 Control de Ventas", "🛠️ Reporte de Instalaciones", "📈 Gestión de Asesores"])
 st.sidebar.markdown("---")
 
 # ==========================================
@@ -113,7 +121,7 @@ if seccion == "📊 Control de Ventas":
         st.error(f"Error en ventas: {e}")
 
 # ==========================================
-# MÓDULO 2: REPORTE DE INSTALACIONES (CON TARJETAS DEBAJO)
+# MÓDULO 2: REPORTE DE INSTALACIONES
 # ==========================================
 elif seccion == "🛠️ Reporte de Instalaciones":
     st.markdown('<div class="asesor-header">🛠️ Control de Instalaciones</div>', unsafe_allow_html=True)
@@ -133,12 +141,10 @@ elif seccion == "🛠️ Reporte de Instalaciones":
                 df_f = df_anio[df_anio['ESTADO'].isin(estados_sel)].copy()
             else: df_f = df_anio.copy()
 
-            # --- 1. LISTADO DETALLADO AL INICIO ---
             st.markdown(f"### 📋 Listado Detallado - Año {anio_sel}")
             st.dataframe(df_f[['CLIENTE', 'PRODUCTO', 'ESTADO']], use_container_width=True, hide_index=True)
             st.markdown("---")
 
-            # --- 2. ANÁLISIS POR PRODUCTO ---
             if 'PRODUCTO' in df_f.columns:
                 st.markdown("### 📦 Análisis por Producto")
                 df_prod = df_f['PRODUCTO'].value_counts().reset_index()
@@ -148,7 +154,6 @@ elif seccion == "🛠️ Reporte de Instalaciones":
                 fig_prod.update_layout(height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white", showlegend=False)
                 st.plotly_chart(fig_prod, use_container_width=True)
 
-                # TARJETAS DEBAJO DE PRODUCTO (Como Imagen 3)
                 prod_estrella = df_prod.iloc[0]['Producto'] if not df_prod.empty else "N/A"
                 st.markdown(f"""
                 <div class="card-container">
@@ -157,7 +162,6 @@ elif seccion == "🛠️ Reporte de Instalaciones":
                 </div>
                 """, unsafe_allow_html=True)
 
-            # --- 3. RENDIMIENTO POR ESTADO ---
             if not df_f.empty and 'ESTADO' in df_f.columns:
                 st.markdown("### 📊 Rendimiento por Estado")
                 df_st = df_f['ESTADO'].value_counts().reset_index()
@@ -170,7 +174,6 @@ elif seccion == "🛠️ Reporte de Instalaciones":
                 fig_status.update_layout(height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white", showlegend=False)
                 st.plotly_chart(fig_status, use_container_width=True)
 
-                # TARJETAS DEBAJO DE ESTADO (KPIs GENERALES - Como Imagen 3)
                 total_reg = len(df_f)
                 instalados = len(df_f[df_f['ESTADO'].astype(str).str.contains("INSTALADO", case=False, na=False)])
                 st.markdown(f"""
@@ -180,3 +183,69 @@ elif seccion == "🛠️ Reporte de Instalaciones":
                     <div class="card-total" style="border-left-color: #FF9800;"><div class="total-label">Otros</div><div class="total-amount">{total_reg-instalados}</div></div>
                 </div>
                 """, unsafe_allow_html=True)
+
+# ==========================================
+# MÓDULO 3: GESTIÓN DE ASESORES
+# ==========================================
+elif seccion == "📈 Gestión de Asesores":
+    st.markdown('<div class="asesor-header">📈 Reporte Diario de Gestión Unificado</div>', unsafe_allow_html=True)
+    
+    try:
+        file_id_g = URL_GESTION.split('/')[-2]
+        export_url_g = f'https://docs.google.com/spreadsheets/d/{file_id_g}/export?format=xlsx'
+        xls_g = pd.ExcelFile(export_url_g)
+        
+        hojas_excluir = ['VARIABLES', 'VENTAS', 'TELEVENTAS', 'FACEBOOK', 'RETENCION']
+        hojas_asesores = [h for h in xls_g.sheet_names if h.strip().upper() not in hojas_excluir]
+        
+        asesor_gestion = st.sidebar.selectbox("👤 Seleccionar Asesor para Gestión:", hojas_asesores)
+        df_g = cargar_datos(URL_GESTION, asesor_gestion)
+        
+        if df_g is not None:
+            df_g.columns = [str(c).upper() for c in df_g.columns]
+
+            col_fecha_g = 'FECHA INICIO GESTIÓN'
+            if col_fecha_g in df_g.columns:
+                df_g[col_fecha_g] = pd.to_datetime(df_g[col_fecha_g], errors='coerce').dt.strftime('%d-%m-%Y')
+
+            col_est = 'ESTADO' if 'ESTADO' in df_g.columns else None
+            
+            if col_est:
+                df_g[col_est] = df_g[col_est].astype(str).str.strip().str.upper()
+                df_valido = df_g[df_g[col_est] != 'NAN'].copy()
+                
+                total = len(df_valido)
+                firmados = len(df_valido[df_valido[col_est].str.contains("FIRMADO", na=False)])
+                gestion = len(df_valido[df_valido[col_est].str.contains("GESTI", na=False)])
+                
+                st.markdown(f"""
+                <div class="card-container">
+                    <div class="card-total"><div class="total-label">Total Gestiones</div><div class="total-amount">{total}</div></div>
+                    <div class="card-total" style="border-left-color: #4CAF50;"><div class="total-label">Firmados</div><div class="total-amount">{firmados}</div></div>
+                    <div class="card-total" style="border-left-color: #FF9800;"><div class="total-label">En Gestión</div><div class="total-amount">{gestion}</div></div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                col_gr, col_tb = st.columns([1.2, 0.8])
+                df_counts = df_valido[col_est].value_counts().reset_index()
+                df_counts.columns = ['Estado', 'Total']
+
+                with col_gr:
+                    fig_g = px.pie(df_counts, values='Total', names='Estado', hole=0.4, title=f"Estados de {asesor_gestion}")
+                    fig_g.update_layout(paper_bgcolor='rgba(0,0,0,0)', font_color="white", showlegend=False)
+                    st.plotly_chart(fig_g, use_container_width=True)
+                with col_tb:
+                    st.write("#### Resumen de Estados")
+                    st.dataframe(df_counts, use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+            st.markdown("### 📄 Últimas Gestiones Registradas")
+            cols_vista = [c for c in ['FECHA INICIO GESTIÓN', 'NOMBRE', 'ESTADO', 'COMENTARIOS'] if c in df_g.columns]
+            
+            st.dataframe(
+                df_g[cols_vista].tail(20) if cols_vista else df_g.tail(20), 
+                use_container_width=True,
+                hide_index=True
+            )
+    except Exception as e:
+        st.error(f"No se pudo cargar el módulo de gestión: {e}")
