@@ -1,4 +1,6 @@
-
+import streamlit as st
+import pandas as pd
+import plotly.express as px
 
 # 1. Configuración de la página
 st.set_page_config(page_title="Control de Ventas - Inmovision", layout="wide")
